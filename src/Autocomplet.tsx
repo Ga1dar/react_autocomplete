@@ -1,57 +1,56 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Person } from './types/Person';
-import React = require('react');
+import * as React from 'react';
+
 
 type Props = {
   people: Person[];
   delay?: number;
-  onSelected: (p: Person) => void;
+  onSelected: (p: Person | null) => void;
 };
 
 function useDebounced<T>(value: T, delay = 300) {
-  const [debounced, setDebounce] = useState(value);
+  const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounce(value), delay);
-
+    const t = setTimeout(() => setDebounced(value), delay);
     return () => clearTimeout(t);
   }, [value, delay]);
 
   return debounced;
 }
 
-export const Autocomplete: React.FC<Props> = ({
-  people,
-  delay,
-  onSelected,
-}) => {
+export const Autocomplete: React.FC<Props> = ({ people, delay, onSelected }) => {
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Person | null>(null);
 
   const debounced = useDebounced(input, delay);
+
   const lastSearchRef = useRef<string>('');
-  const shouldShowAll = open && debounced.trim() === '';
+  const lastResultsRef = useRef<Person[]>(people);
+
+  const shouldShowAll = open && input.trim() === '';
 
   const suggestions = useMemo(() => {
+  
     if (debounced === lastSearchRef.current) {
-      return null;
+      return lastResultsRef.current;
     }
 
     lastSearchRef.current = debounced;
 
     const query = debounced.trim().toLowerCase();
+    const results = query
+      ? people.filter(p => p.name.toLowerCase().includes(query))
+      : people;
 
-    if (!query) {
-      return people;
-    }
-
-    return people.filter(p => p.name.toLowerCase().includes(query));
+    lastResultsRef.current = results;
+    return results;
   }, [people, debounced]);
 
-  const list = shouldShowAll ? people : (suggestions ?? []);
-  const nothingFound =
-    !shouldShowAll && Array.isArray(suggestions) && suggestions.length === 0;
+  const list = shouldShowAll ? people : suggestions;
+  const nothingFound = !shouldShowAll && suggestions.length === 0;
 
   const handleSelected = (p: Person) => {
     setSelected(p);
@@ -63,8 +62,9 @@ export const Autocomplete: React.FC<Props> = ({
   useEffect(() => {
     if (selected && selected.name !== input) {
       setSelected(null);
+      onSelected(null);
     }
-  }, [input, selected]);
+  }, [input, selected, onSelected]);
 
   return (
     <div className={`dropdown ${open ? 'is-active' : ''}`}>
@@ -74,9 +74,14 @@ export const Autocomplete: React.FC<Props> = ({
           placeholder="Enter a part of the name"
           className="input"
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setInput(v);
+            setOpen(true);
+             if (selected) onSelected(null);
+          }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 100)}
+          onBlur={() => setTimeout(() => setOpen(false), delay)}
           data-cy="search-input"
         />
       </div>
@@ -85,7 +90,7 @@ export const Autocomplete: React.FC<Props> = ({
         <div className="dropdown-menu" role="menu" data-cy="suggestions-list">
           <div className="dropdown-content">
             {nothingFound && (
-              <div className="dropdown-item">
+              <div className="dropdown-item" data-cy="no-suggestions-message">
                 <p className="has-text-danger">No matching suggestions</p>
               </div>
             )}

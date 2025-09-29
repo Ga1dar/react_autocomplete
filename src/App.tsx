@@ -1,8 +1,9 @@
-import * as React from 'react';
 import './App.scss';
 import { peopleFromServer } from './data/people';
 import Autocomplete from './Autocomplet';
 import { Person } from './types/Person';
+import * as React from 'react'
+
 
 export const App: React.FC = () => {
   const [selected, setSelected] = React.useState<Person | null>(null);
@@ -19,7 +20,7 @@ export const App: React.FC = () => {
         <Autocomplete
           people={peopleFromServer}
           delay={300}
-          onSelected={p => setSelected(p)}
+          onSelected={setSelected}
         />
       </main>
     </div>
