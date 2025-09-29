@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Person } from './types/Person';
 import * as React from 'react';
 
-
 type Props = {
   people: Person[];
   delay?: number;
   onSelected: (p: Person | null) => void;
+  selected?: Person | null;
 };
 
 function useDebounced<T>(value: T, delay = 300) {
@@ -14,57 +14,62 @@ function useDebounced<T>(value: T, delay = 300) {
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(value), delay);
+
     return () => clearTimeout(t);
   }, [value, delay]);
 
   return debounced;
 }
 
-export const Autocomplete: React.FC<Props> = ({ people, delay, onSelected }) => {
-  const [input, setInput] = useState('');
+export const Autocomplete: React.FC<Props> = ({
+  people,
+  delay = 300,
+  onSelected,
+  selected,
+}) => {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<Person | null>(null);
-
-  const debounced = useDebounced(input, delay);
-
-  const lastSearchRef = useRef<string>('');
-  const lastResultsRef = useRef<Person[]>(people);
-
-  const shouldShowAll = open && input.trim() === '';
-
-  const suggestions = useMemo(() => {
-  
-    if (debounced === lastSearchRef.current) {
-      return lastResultsRef.current;
-    }
-
-    lastSearchRef.current = debounced;
-
-    const query = debounced.trim().toLowerCase();
-    const results = query
-      ? people.filter(p => p.name.toLowerCase().includes(query))
-      : people;
-
-    lastResultsRef.current = results;
-    return results;
-  }, [people, debounced]);
-
-  const list = shouldShowAll ? people : suggestions;
-  const nothingFound = !shouldShowAll && suggestions.length === 0;
-
-  const handleSelected = (p: Person) => {
-    setSelected(p);
-    setInput(p.name);
-    setOpen(false);
-    onSelected(p);
-  };
+  const [input, setInput] = useState('');
 
   useEffect(() => {
-    if (selected && selected.name !== input) {
-      setSelected(null);
+    if (selected && input.trim() !== selected.name) {
       onSelected(null);
     }
   }, [input, selected, onSelected]);
+
+  const debounced = useDebounced(input, delay);
+
+  const lastResultsRef = useRef<{
+    key: string;
+    results: Person[];
+  } | null>(null);
+
+  const list = useMemo(() => {
+    const normalized = debounced.trim().toLowerCase();
+
+    if (normalized === '') {
+      lastResultsRef.current = { key: normalized, results: people };
+      return people;
+    }
+
+    if (lastResultsRef.current?.key === normalized) {
+      return lastResultsRef.current.results;
+    }
+
+    const results = people.filter(p =>
+      p.name.toLowerCase().includes(normalized),
+    );
+
+    lastResultsRef.current = { key: normalized, results };
+    return results;
+  }, [debounced, people]);
+
+  const nothingFound = open && list.length === 0;
+
+  const handleSelected = (person: Person) => {
+    setInput(person.name);
+    setOpen(false);
+    onSelected(person);
+  };
 
   return (
     <div className={`dropdown ${open ? 'is-active' : ''}`}>
@@ -74,23 +79,31 @@ export const Autocomplete: React.FC<Props> = ({ people, delay, onSelected }) => 
           placeholder="Enter a part of the name"
           className="input"
           value={input}
-          onChange={(e) => {
-            const v = e.target.value;
-            setInput(v);
+          onChange={e => {
+            setInput(e.target.value);
             setOpen(true);
-             if (selected) onSelected(null);
           }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), delay)}
+          onBlur={() => setOpen(false)}
           data-cy="search-input"
+          data-qa="search-input"
         />
       </div>
 
       {open && (
-        <div className="dropdown-menu" role="menu" data-cy="suggestions-list">
+        <div
+          className="dropdown-menu"
+          role="menu"
+          data-cy="suggestions-list"
+          data-qa="suggestions-list"
+        >
           <div className="dropdown-content">
             {nothingFound && (
-              <div className="dropdown-item" data-cy="no-suggestions-message">
+              <div
+                className="dropdown-item"
+                data-cy="no-suggestions-message"
+                data-qa="no-suggestions-message"
+              >
                 <p className="has-text-danger">No matching suggestions</p>
               </div>
             )}
@@ -100,6 +113,7 @@ export const Autocomplete: React.FC<Props> = ({ people, delay, onSelected }) => 
                 key={person.slug}
                 className="dropdown-item"
                 data-cy="suggestion-item"
+                data-qa="suggestion-item"
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => handleSelected(person)}
               >
